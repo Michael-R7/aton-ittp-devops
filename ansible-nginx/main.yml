@@ -1,0 +1,46 @@
+---
+- name: Configure Nginx web server
+  hosts: webservers
+  become: true
+
+  vars_files:
+    - vars.yml
+
+  tasks:
+    - name: Update APT package index
+      apt:
+        update_cache: yes
+
+    - name: Install Nginx
+      apt:
+        name: "{{ nginx_package }}"
+        state: present
+
+    - name: Deploy Nginx configuration
+      template:
+        src: templates/nginx.conf.j2
+        dest: "{{ nginx_conf_file }}"
+        mode: '0644'
+      notify:
+        - Restart Nginx
+
+    - name: Ensure Nginx is running and enabled
+      service:
+        name: "{{ nginx_service }}"
+        state: started
+        enabled: yes
+
+    - name: Check Nginx is running on port {{ nginx_listen_port }}
+      uri:
+        url: "http://localhost:{{ nginx_listen_port }}"
+        return_content: no
+      register: result
+      until: result.status == 200
+      retries: 5
+      delay: 3
+
+  handlers:
+    - name: Restart Nginx
+      service:
+        name: "{{ nginx_service }}"
+        state: restarted
