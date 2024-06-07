@@ -1,0 +1,36 @@
+#!/bin/bash
+
+CONFIG_FILE="smtp_config.conf"
+if [ ! -f "$CONFIG_FILE" ]; then
+    echo "Configuration file $CONFIG_FILE not found!"
+    exit 1
+fi
+
+source "$CONFIG_FILE"
+
+if [ -z "$SMTP_SERVER" ] || [ -z "$SMTP_PORT" ] || [ -z "$SMTP_USER" ] || [ -z "$SMTP_PASS" ] || [ -z "$TO_EMAIL" ]; then
+    echo "One or more required configuration parameters are missing!"
+    exit 1
+fi
+
+THRESHOLD=85
+
+send_alert() {
+    local subject="Disk Space Alert"
+    local message="Disk usage has exceeded the threshold of ${THRESHOLD}%. Current usage: $1%."
+    
+    {
+        echo "Subject: ${subject}"
+        echo "To: ${TO_EMAIL}"
+        echo "From: ${SMTP_USER}"
+        echo
+        echo "${message}"
+    } | ssmtp -v -C /etc/ssmtp/ssmtp.conf "${TO_EMAIL}"
+}
+
+disk_usage=$(df / | grep / | awk '{ print $5 }' | sed 's/%//g')
+
+if [ "${disk_usage}" -gt "${THRESHOLD}" ]; then
+    send_alert "${disk_usage}"
+fi
+
