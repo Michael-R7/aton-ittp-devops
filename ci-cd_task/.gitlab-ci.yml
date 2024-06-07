@@ -1,0 +1,56 @@
+stages:
+  - build
+  - publish_gitlab_registry
+  - release_docker_hub
+  - launch_container
+
+variables:
+  DOCKER_HOST: tcp://docker:2375/
+  DOCKER_DRIVER: overlay2
+  DOCKER_TLS_CERTDIR: ""
+  DOCKER_IMAGE_TAG: $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA
+  DOCKER_HUB_IMAGE_TAG: "r7michael/flask-project-01:v1.0.0" 
+services:
+  - docker:26.1.1-dind
+
+before_script:
+  - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+
+build:
+  stage: build
+  image: docker:26.1.1
+  script:
+    - docker build -t $DOCKER_IMAGE_TAG .
+    - docker push $DOCKER_IMAGE_TAG
+  only:
+    - main
+
+publish_gitlab_registry:
+  stage: publish_gitlab_registry
+  image: docker:26.1.1
+  script:
+    - docker pull "$DOCKER_IMAGE_TAG"
+    - docker tag "$DOCKER_IMAGE_TAG" "$CI_REGISTRY_IMAGE:latest"
+    - docker push "$CI_REGISTRY_IMAGE:latest"
+  only:
+    - main
+
+release_docker_hub:
+  stage: release_docker_hub
+  image: docker:26.1.1
+  script:
+    - echo "$DOCKER_HUB_PASSWORD" | docker login -u "$DOCKER_HUB_USER" --password-stdin
+    - docker pull "$DOCKER_IMAGE_TAG"
+    - docker tag "$DOCKER_IMAGE_TAG" "$DOCKER_HUB_IMAGE_TAG"
+    - docker push "$DOCKER_HUB_IMAGE_TAG"
+  only:
+    - main
+
+launch_container:
+  stage: launch_container
+  image: docker:26.1.1
+  script:
+    - docker pull "$DOCKER_IMAGE_TAG"
+    - docker run -d --name flask_project -p 80:80 "$DOCKER_IMAGE_TAG"
+  only:
+    - main
